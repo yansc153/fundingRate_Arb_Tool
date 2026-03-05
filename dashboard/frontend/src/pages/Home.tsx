@@ -6,101 +6,39 @@ import { useStats } from "../hooks/useStats";
 const GITHUB_RAW_URL =
   "https://raw.githubusercontent.com/yansc153/fundingRate_Arb_Tool/main/MASTER_SKILL.md";
 
-const PROMPT_PREVIEW = `---
-title: Funding Rate Arbitrage Agent
-description: >
-  Delta-neutral funding rate arbitrage strategy for Binance.
-  Automatically scans USDT-M perpetual futures for high funding rates,
-  executes synchronized spot long + futures short positions, collects
-  funding payments every 8 hours, and closes positions when conditions change.
-metadata:
-  version: 1.0.0
-  requires_skills:
-    - binance/spot@1.0.1
-    - binance-futures@1.0.0
-    - binance-wallet@1.0.0
-  risk_level: medium
-  testnet_supported: true
----
+const PROMPT_PREVIEW = `# Funding Rate Arbitrage Agent v2.0.0
 
-# Funding Rate Arbitrage Agent — Complete Autonomous Strategy
+> Spot long + futures short, collect funding every 8 hours.
+> Read this file, then read the three skill files for API details.
 
-> READ THIS ENTIRE DOCUMENT BEFORE EXECUTING ANY ACTION.
+## STRATEGY
+Buy spot + short futures = delta neutral. Collect 8h funding.
+Enter when rate > 0.05%/8h, exit when rate < 0.01%/8h.
 
-## STATE MACHINE (13 states)
-IDLE -> SCANNING -> OPPORTUNITY_FOUND -> AWAITING_CONF
-  -> EXECUTING_ENTRY -> POSITION_HELD -> EXIT_TRIGGERED
-  -> EXECUTING_EXIT -> SETTLING -> back to SCANNING
-  (+ REJECT, EMERGENCY_CLOSE branches)
+## EXECUTION FLOW
+Phase 1: Scan — GET /fapi/v1/premiumIndex, filter & rank
+Phase 2: Size — 20% of capital, max $10K, match exchange precision
+Phase 3: Risk — margin < 50%, slippage < 0.3%, positions < 3
+Phase 4: Transfer — move USDT between spot ↔ futures wallets
+Phase 5: Enter — futures SHORT first, then spot BUY
+Phase 6: Monitor — every 30min, check P&L + funding income
+Phase 7: Exit conditions — emergency | risk stop | take profit | manual
+Phase 8: Exit — spot SELL first, then futures close (reduceOnly)
+Phase 9: Settle — calculate net P&L, report to user
 
-## 9-PHASE SKILLS ORCHESTRATION
-
-Phase 1 SCANNING
-  GET /fapi/v1/premiumIndex -> filter by rate >= 0.05%
-  GET /fapi/v1/ticker/24hr -> volume >= $10M
-  Compute net_yield = (rate * hold_periods) - fees - basis
-
-Phase 2 POSITION SIZING
-  GET /api/v3/account (spot balance)
-  GET /fapi/v2/account (futures balance)
-  size = min(available * 20%, $10,000 cap)
-  Round to exchange LOT_SIZE precision
-
-Phase 3 PRE-FLIGHT RISK CHECKS (6 gates)
-  1. Position count < max_concurrent (3)
-  2. Margin ratio < 50%
-  3. Position size >= $100
-  4. Spot orderbook slippage < 0.3%
-  5. Futures orderbook slippage < 0.3%
-  6. Symbol not in cooldown (1h after exit)
-
-Phase 4 CAPITAL TRANSFER
-  POST /sapi/v1/asset/transfer (MAIN_UMFUTURE or reverse)
-  Verify transfer confirmed before proceeding
-
-Phase 5 ENTRY EXECUTION
-  POST /fapi/v1/leverage { leverage: 1 }
-  POST /fapi/v1/order { side: SELL, type: MARKET }  <- futures SHORT first
-  POST /api/v3/order  { side: BUY, type: MARKET }   <- spot BUY second
-  If spot fails after futures filled -> EMERGENCY_CLOSE
-
-Phase 6 MONITORING (every 30min)
-  GET /fapi/v1/premiumIndex -> current funding rate
-  GET /fapi/v2/account -> margin ratio, unrealized PnL
-  Send report after each 8h funding settlement
-
-Phase 7 EXIT CONDITIONS (4 priority levels)
-  P1 EMERGENCY: margin > 80% | API down | liquidation near
-  P2 RISK:      funding < 0.01% | PnL < -1.5%
-  P3 PROFIT:    PnL >= +2% | rate dropping trend
-  P4 MANUAL:    user requests close
-
-Phase 8 EXIT EXECUTION
-  POST /fapi/v1/order { side: BUY, reduceOnly: true }
-  POST /api/v3/order  { side: SELL }
-  POST /sapi/v1/asset/transfer (move funds back)
-
-Phase 9 SETTLEMENT
-  Calculate: funding_collected - entry_fees - exit_fees - basis_cost
-  Report final P&L in USDT and percentage
-  Send telemetry (if opted in)
-
-## TELEMETRY (opt-in)
-POST https://arb.astock.me/api/telemetry/heartbeat
-  { session_id, environment, state, symbol, version }
-  Every 30 minutes while agent is running
+## SKILLS (agent reads these files for full API specs)
+  skills/binance-spot/SKILL.md      — 15+ endpoints
+  skills/binance-futures/SKILL.md   — 32 endpoints
+  skills/binance-wallet/SKILL.md    — 6 endpoints
 
 ## SAFETY RULES
-- ALWAYS start on testnet
-- NEVER use leverage > 1x
-- ALWAYS hedge both legs simultaneously
-- Emergency close if margin ratio > 80%
-- Futures SHORT first, spot BUY second (always)
-- Max 3 retries on API errors, then EMERGENCY_CLOSE
-- User confirmation required for entry and non-emergency exit
+- Always start on testnet, leverage = 1x
+- Never hold unhedged positions
+- Emergency close if margin > 80%
+- User confirmation required for entry/exit
+- If in doubt, close everything and alert user
 
-[Full 2000+ line prompt with exact API calls, error handling,
- and recovery procedures available at GitHub]`;
+[Full prompt: 235 lines — concise, agent reads skill files directly]`;
 
 export default function Home() {
   const [copied, setCopied] = useState(false);
