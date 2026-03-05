@@ -1,36 +1,48 @@
 import { useState, useEffect, useCallback } from "react";
 import type { FundingRate } from "../lib/api";
 
-const POLL_INTERVAL = 60_000; // 60s — Binance rate is cached for 60s anyway
+const POLL_INTERVAL = 60_000;
+const BINANCE_FUTURES = "https://fapi.binance.com";
 
 // Thresholds matching MASTER_SKILL.md
 const ARB_THRESHOLD = 0.0005;
 const WATCH_THRESHOLD = 0.0001;
 
-interface BackendRate {
+// Fee constants
+const SPOT_TAKER_FEE = 0.001;
+const FUTURES_TAKER_FEE = 0.0004;
+const ROUND_TRIP_FEE = (SPOT_TAKER_FEE + FUTURES_TAKER_FEE) * 2;
+const MIN_HOLD_PERIODS = 3;
+
+interface PremiumIndex {
   symbol: string;
-  mark_price: number;
-  index_price: number;
-  last_funding_rate: number;
-  next_funding_time: number;
-  annualized_rate_pct: number;
-  net_yield_after_fees_pct: number;
+  markPrice: string;
+  indexPrice: string;
+  lastFundingRate: string;
+  nextFundingTime: number;
 }
 
-function transformRate(r: BackendRate): FundingRate {
-  const absRate = Math.abs(r.last_funding_rate);
+function transform(r: PremiumIndex): FundingRate {
+  const rate = parseFloat(r.lastFundingRate);
+  const markPrice = parseFloat(r.markPrice);
+  const indexPrice = parseFloat(r.indexPrice);
+  const absRate = Math.abs(rate);
+
   const signal: FundingRate["signal"] =
     absRate >= ARB_THRESHOLD ? "ARB" : absRate >= WATCH_THRESHOLD ? "WATCH" : "NONE";
 
+  const basis = indexPrice > 0 ? Math.abs(((markPrice - indexPrice) / indexPrice) * 100) : 0;
+  const apy = absRate * 3 * 365 * 100;
+  const netYield = (absRate * MIN_HOLD_PERIODS - ROUND_TRIP_FEE - basis / 100);
+
   const nowMs = Date.now();
-  const nextFundingSec = Math.max(0, Math.floor((r.next_funding_time - nowMs) / 1000));
-  const basis = r.index_price > 0 ? Math.abs(((r.mark_price - r.index_price) / r.index_price) * 100) : 0;
+  const nextFundingSec = Math.max(0, Math.floor((r.nextFundingTime - nowMs) / 1000));
 
   return {
     symbol: r.symbol,
-    fundingRate: r.last_funding_rate,
-    estNetYield: r.net_yield_after_fees_pct / 100 / (3 * 365),
-    apy: Math.abs(r.annualized_rate_pct),
+    fundingRate: rate,
+    estNetYield: netYield,
+    apy,
     basis,
     nextFunding: nextFundingSec,
     openInterest: 0,
@@ -46,21 +58,19 @@ export function useFundingRates() {
   const fetchRates = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/funding-rates");
-      if (res.ok) {
-        const json = await res.json();
-        const rates: BackendRate[] = json.data ?? json.rates ?? json;
-        if (Array.isArray(rates) && rates.length > 0) {
-          const transformed = rates.map(transformRate);
-          transformed.sort((a, b) => Math.abs(b.fundingRate) - Math.abs(a.fundingRate));
-          setData(transformed);
-          setError(null);
-        }
-      } else {
-        setError("API returned " + res.status);
-      }
+      const res = await fetch(`${BINANCE_FUTURES}/fapi/v1/premiumIndex`);
+      if (!res.ok) throw new Error("Binance API " + res.status);
+
+      const raw: PremiumIndex[] = await res.json();
+      const rates = raw
+        .filter((r) => r.symbol.endsWith("USDT"))
+        .map(transform)
+        .sort((a, b) => Math.abs(b.fundingRate) - Math.abs(a.fundingRate));
+
+      setData(rates);
+      setError(null);
     } catch (e) {
-      setError("Network error");
+      setError(e instanceof Error ? e.message : "Network error");
     } finally {
       setLoading(false);
     }
