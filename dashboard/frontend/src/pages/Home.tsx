@@ -3,42 +3,12 @@ import Marquee from "react-fast-marquee";
 import { useFundingRates } from "../hooks/useFundingRates";
 import { useStats } from "../hooks/useStats";
 
-const GITHUB_RAW_URL =
-  "https://raw.githubusercontent.com/yansc153/fundingRate_Arb_Tool/main/MASTER_SKILL.md";
+const PROMPT_PREVIEW = `去 GitHub 读取并执行资金费率套利策略：
+https://github.com/yansc153/fundingRate_Arb_Tool
 
-const PROMPT_PREVIEW = `# Funding Rate Arbitrage Agent v2.0.0
-
-> Spot long + futures short, collect funding every 8 hours.
-> Read this file, then read the three skill files for API details.
-
-## STRATEGY
-Buy spot + short futures = delta neutral. Collect 8h funding.
-Enter when rate > 0.05%/8h, exit when rate < 0.01%/8h.
-
-## EXECUTION FLOW
-Phase 1: Scan — GET /fapi/v1/premiumIndex, filter & rank
-Phase 2: Size — 20% of capital, max $10K, match exchange precision
-Phase 3: Risk — margin < 50%, slippage < 0.3%, positions < 3
-Phase 4: Transfer — move USDT between spot ↔ futures wallets
-Phase 5: Enter — futures SHORT first, then spot BUY
-Phase 6: Monitor — every 30min, check P&L + funding income
-Phase 7: Exit conditions — emergency | risk stop | take profit | manual
-Phase 8: Exit — spot SELL first, then futures close (reduceOnly)
-Phase 9: Settle — calculate net P&L, report to user
-
-## SKILLS (agent reads these files for full API specs)
-  skills/binance-spot/SKILL.md      — 15+ endpoints
-  skills/binance-futures/SKILL.md   — 32 endpoints
-  skills/binance-wallet/SKILL.md    — 6 endpoints
-
-## SAFETY RULES
-- Always start on testnet, leverage = 1x
-- Never hold unhedged positions
-- Emergency close if margin > 80%
-- User confirmation required for entry/exit
-- If in doubt, close everything and alert user
-
-[Full prompt: 235 lines — concise, agent reads skill files directly]`;
+1. 读 MASTER_SKILL.md — 完整策略逻辑
+2. 读 skills/ 下的三个 SKILL.md — API 端点规范
+3. 按策略执行：扫描费率 → 开仓 → 监控 → 平仓`;
 
 export default function Home() {
   const [copied, setCopied] = useState(false);
@@ -60,20 +30,11 @@ export default function Home() {
   }, [fundingRates]);
 
   const handleCopy = async () => {
+    setCopied(true);
     try {
-      setCopied(true);
-      // Fetch the full MASTER_SKILL.md from GitHub
-      const res = await fetch(GITHUB_RAW_URL);
-      const fullPrompt = res.ok ? await res.text() : PROMPT_PREVIEW;
-      await navigator.clipboard.writeText(fullPrompt);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback to preview
-      try {
-        await navigator.clipboard.writeText(PROMPT_PREVIEW);
-      } catch { /* ignore */ }
-      setTimeout(() => setCopied(false), 2000);
-    }
+      await navigator.clipboard.writeText(PROMPT_PREVIEW);
+    } catch { /* ignore */ }
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
