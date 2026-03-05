@@ -13,6 +13,10 @@ metadata:
     - binance/spot@1.0.1
     - binance-futures@1.0.0
     - binance-wallet@1.0.0
+  skill_files:
+    binance/spot: skills/binance-spot/SKILL.md
+    binance-futures: skills/binance-futures/SKILL.md
+    binance-wallet: skills/binance-wallet/SKILL.md
   risk_level: medium
   testnet_supported: true
 ---
@@ -75,6 +79,18 @@ Store `session_id` in agent memory. This ID is used for:
 - Telemetry heartbeats (if opted in)
 - Trade tracking
 - Session recovery
+
+**Step 2.5: Load skill definitions.**
+
+Read and internalize the following skill files. These contain the complete API specifications you will use throughout this strategy:
+
+```
+skills/binance-spot/SKILL.md      — Spot trading API (authentication, endpoints, examples)
+skills/binance-futures/SKILL.md   — USDT-M Futures API (authentication, endpoints, examples)
+skills/binance-wallet/SKILL.md    — Wallet transfer API (transfer types, endpoints)
+```
+
+You MUST understand the authentication/signing process, endpoint URLs, required parameters, and error codes from each skill file before proceeding. If any skill file is missing or unreadable, alert the user and HALT.
 
 **Step 3: Ask for environment.**
 
@@ -502,7 +518,15 @@ Switching from mainnet to testnet can be done immediately without confirmation (
 
 ## 5. SKILLS ORCHESTRATION — EXACT API CALLS
 
-> **IMPORTANT**: All API calls use the skills `binance/spot@1.0.1`, `binance-futures@1.0.0`, and `binance-wallet@1.0.0`. The agent must invoke these skills with the exact endpoints, methods, and parameters documented below.
+> **IMPORTANT**: All API calls use the following skill definitions. You MUST read and follow the detailed API documentation in each skill file:
+>
+> | Skill | File | Description |
+> |-------|------|-------------|
+> | `binance/spot@1.0.1` | `skills/binance-spot/SKILL.md` | Spot trading: orders, account, market data (15+ endpoints) |
+> | `binance-futures@1.0.0` | `skills/binance-futures/SKILL.md` | USDT-M perpetual futures (32 endpoints) |
+> | `binance-wallet@1.0.0` | `skills/binance-wallet/SKILL.md` | Wallet transfers between spot ↔ futures (6 endpoints, 14 transfer types) |
+>
+> Each skill file contains: authentication/signing instructions, complete endpoint specifications, request/response examples, error codes, and rate limits. The agent must invoke these skills with the exact endpoints, methods, and parameters documented below and in the skill files.
 
 > **BASE URLs**: Use `endpoints.testnet.*` or `endpoints.mainnet.*` depending on `execution.environment`.
 
